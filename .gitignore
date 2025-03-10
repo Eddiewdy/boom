@@ -1,0 +1,14 @@
+# 系统文件
+.DS_Store
+
+# counter_write_test 目录下的二进制文件
+counter_write_test/*.dump
+counter_write_test/*.bin
+counter_write_test/hello
+
+# 其他常见的编译产物
+*.o
+*.a
+*.so
+*.elf
+*.out

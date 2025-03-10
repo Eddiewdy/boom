@@ -23,10 +23,8 @@ class SubEventCounterIO(readWidth: Int)(implicit p: Parameters) extends BoomBund
 class SubEventCounter(readWidth: Int)(implicit p: Parameters) extends BoomModule
 {
 	val io = IO(new SubEventCounterIO(readWidth))
-	
-	// 修改reg_counters定义，不再使用WideCounter，而是使用普通的寄存器
 	// val reg_counters = io.event_signals.zipWithIndex.map { case (e, i) => freechips.rocketchip.util.WideCounter(64, e, reset = false) }
-	val reg_counters = RegInit(VecInit(Seq.fill(16)(0.U(64.W))))
+  val reg_counters = RegInit(VecInit(Seq.fill(16)(0.U(64.W))))
 
   for (i <- 0 until readWidth) {
     when (io.read_addr(i).valid) {

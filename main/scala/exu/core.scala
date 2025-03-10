@@ -1391,10 +1391,11 @@ class BoomCore(usingTrace: Boolean)(implicit p: Parameters) extends BoomModule
       val uop = exe_unit.io.req.bits.uop
       when (uop.readCounter && uop.ldst =/= 0.U) {
         exe_unit.io.req.bits.rs1_data := event_counters.io.read_data(iss_idx)
+        printf("readCounter\n")
       }
       
       //Enable_WriteCounter_Support: write rs1 data to performance counter
-      when (uop.writeCounter && uop.ldst === 0.U) {
+      when (uop.writeCounter && uop.ldst =/= 0.U) {
         val counter_idx = uop.inst(31, 20)(6, 0)
         val rs1_data = exe_unit.io.req.bits.rs1_data
         event_counters.io.write_addr(iss_idx).valid := true.B

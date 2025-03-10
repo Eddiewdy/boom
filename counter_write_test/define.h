@@ -118,16 +118,16 @@
 ); 
 
 
-extern uint64_t tempStackMem[4096];
-#define Load_Basic_Regs() asm volatile( \
-    "la t0, tempStackMem  \n\t"   \
-    "addi t0, t0, 256  \n\t"   \
-    "ld sp,8*0(t0)  \n\t"   \
-    "ld s0,8*1(t0)  \n\t"   \
-    "ld ra,8*2(t0)  \n\t"   \
-    "ld gp,8*3(t0)  \n\t"   \
-    "ld tp,8*4(t0)  \n\t"   \
-); 
+// extern uint64_t tempStackMem[4096];
+// #define Load_Basic_Regs() asm volatile( \
+//     "la t0, tempStackMem  \n\t"   \
+//     "addi t0, t0, 256  \n\t"   \
+//     "ld sp,8*0(t0)  \n\t"   \
+//     "ld s0,8*1(t0)  \n\t"   \
+//     "ld ra,8*2(t0)  \n\t"   \
+//     "ld gp,8*3(t0)  \n\t"   \
+//     "ld tp,8*4(t0)  \n\t"   \
+// ); 
 
 #define Save_Basic_Regs() asm volatile( \
     "la t0, tempStackMem  \n\t"   \
@@ -213,17 +213,17 @@ extern uint64_t tempStackMem[4096];
 
 
 //-------------------------------------------------------------------
-#define DEF_CSRR(s)                     \
-    static inline unsigned long long read_csr_##s()    \
-    {                                      \
-        unsigned long long value;                    \
-        __asm__ volatile("csrr    %0, " #s \
-                         : "=r"(value)     \
-                         :);               \
-        return value;                      \
-    }
+// #define DEF_CSRR(s)                     \
+//     static inline unsigned long long read_csr_##s()    \
+//     {                                      \
+//         unsigned long long value;                    \
+//         __asm__ volatile("csrr    %0, " #s \
+//                          : "=r"(value)     \
+//                          :);               \
+//         return value;                      \
+//     }
 
-DEF_CSRR(cycle)
-DEF_CSRR(instret)
+// DEF_CSRR(cycle)
+// DEF_CSRR(instret)
 
 #endif

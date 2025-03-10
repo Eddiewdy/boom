@@ -1,1 +1,0 @@
-rsync -a -e "ssh -p 2020" ./scala/ wangyidi@162.105.89.151:/home/wangyidi/boom_perf/src/main/scala/

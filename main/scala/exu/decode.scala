@@ -601,9 +601,12 @@ class DecodeUnit(implicit p: Parameters) extends BoomModule
   //Enable_PerfCounter_Support:
   val readCounter = ucsrInst && event_tag(11, 7) === 1.U  //128 - 256
   uop.readCounter := readCounter
+
+  printf("event_tag: %d\n", event_tag)
   
   //Enable_WriteCounter_Support:
   val writeCounter = ucsrInst && event_tag(11, 7) === 2.U  //256 - 384
+  printf("writeCounter: %d\n", writeCounter)
   uop.writeCounter := writeCounter
 
   when (readCounter || get_ucsr || writeCounter) {
