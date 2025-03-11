@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 定义变量
-LOCAL_DIR="./{*,.git}"
+LOCAL_DIR="./{*,.git,.gitignore}"
 REMOTE_USER="wangyidi"
 REMOTE_HOST="162.105.89.151"
 REMOTE_PORT="2020"
@@ -45,7 +45,7 @@ done
 # 根据模式执行相应的同步操作
 if [[ "$MODE" == "upload" ]]; then
     echo "正在将本地文件同步到服务器..."
-    rsync -av -e "$SSH_CMD" ./{*,.git} $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR
+    rsync -av -e "$SSH_CMD" ./{*,.git,.gitignore} $REMOTE_USER@$REMOTE_HOST:$REMOTE_DIR
     echo "上传完成！"
 elif [[ "$MODE" == "download" ]]; then
     echo "正在将服务器文件同步到本地..."

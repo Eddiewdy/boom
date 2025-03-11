@@ -18,6 +18,7 @@ class SubEventCounterIO(readWidth: Int)(implicit p: Parameters) extends BoomBund
   val write_addr = Input(Vec(readWidth, Valid(UInt(4.W))))
   val write_data = Input(Vec(readWidth, UInt(64.W)))
   val reset_counter = Input(Bool())
+  val perf_counters = Input(Bool()) // 控制哪些计数器是性能计数器（自动累加事件）
 }
 
 class SubEventCounter(readWidth: Int)(implicit p: Parameters) extends BoomModule
@@ -25,6 +26,14 @@ class SubEventCounter(readWidth: Int)(implicit p: Parameters) extends BoomModule
 	val io = IO(new SubEventCounterIO(readWidth))
 	// val reg_counters = io.event_signals.zipWithIndex.map { case (e, i) => freechips.rocketchip.util.WideCounter(64, e, reset = false) }
   val reg_counters = RegInit(VecInit(Seq.fill(16)(0.U(64.W))))
+  printf("io.perf_counters: %d\n", io.perf_counters)
+  // 对于性能计数器，使用类似原始设计的方式自动累加
+  for (w <- 0 until 16) {
+    when (io.perf_counters && io.event_signals(w) =/= 0.U) {
+      // 当事件信号不为0且是性能计数器时，计数器值增加事件信号的值
+      reg_counters(w) := reg_counters(w) + io.event_signals(w)
+    }
+  }
 
   for (i <- 0 until readWidth) {
     when (io.read_addr(i).valid) {
@@ -38,7 +47,7 @@ class SubEventCounter(readWidth: Int)(implicit p: Parameters) extends BoomModule
       io.read_data(i) := 0.U
     }
     
-    // 添加写入计数器的逻辑
+    // 添加写入计数器的逻辑，所有计数器都可以通过写入方式改变值
     when (io.write_addr(i).valid) {
       for (w <- 0 until 16) {
         when (io.write_addr(i).bits === w.U) {
@@ -60,7 +69,6 @@ class SubEventCounter(readWidth: Int)(implicit p: Parameters) extends BoomModule
       printf("w: %d, counter: %d\n", w.U, reg_counters(w) )
     }
   }
-
 }
 
 
@@ -90,6 +98,18 @@ class EventCounter(readWidth: Int)(implicit p: Parameters) extends BoomModule
 
   for (w <- 0 until subECounterNum) {
     ecounters(w).io.reset_counter := io.reset_counter
+    
+    // 设置性能计数器：只有前32个计数器是性能计数器（前2个SubEventCounter的所有计数器）
+    // for (s <- 0 until 16) {
+    //   val isPerfCounter = (w < 2).B // 只有前2个SubEventCounter模块的计数器是性能计数器
+    //   printf("w: %d, s: %d, isPerfCounter: %d\n", w.U, s.U, isPerfCounter)
+    //   ecounters(w).io.perf_counters(s) := isPerfCounter
+    // }
+    val isPerfCounter = (w < 2).B
+    printf("w: %d, isPerfCounter: %d\n", w.U, isPerfCounter)
+    ecounters(w).io.perf_counters := isPerfCounter
+
+
     for (s <- 0 until 16) {
       ecounters(w).io.event_signals(s) := io.event_signals(s+16*w)
     }

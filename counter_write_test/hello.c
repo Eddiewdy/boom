@@ -103,22 +103,22 @@ int main() {
     
     // 读取计数器3
     myputs("Reading counter 3:\n");
-    asm volatile ("addi x0, %0, 130" : "=r"(counter_val));
+    asm volatile ("addi x0, %0, 160" : "=r"(counter_val));
     print_int(counter_val);
 
     // 写入计数器1（不使用宏定义，直接使用mv和addi指令）
-    myputs("Write counter 1:\n");
-    // asm volatile (
-    //     "mv t0, %0  \n\t"    // 将write_val的值移动到t0寄存器
-    //     "addi x0, t0, 256"   // 使用addi指令写入计数器1
-    //     : 
-    //     : "r"(write_val)
-    // );
-    SetTempReg(write_val, 247);
+    myputs("Write counter 3:\n");
+    asm volatile (
+        "mv t0, %0  \n\t"    // 将write_val的值移动到t0寄存器
+        "addi x0, t0, 288"   // 使用addi指令写入计数器1
+        : 
+        : "r"(write_val)
+    );
+    // SetTempReg(write_val, 279);
 
     // 再次读取计数器1验证写入结果
-    myputs("Reading counter 1 after write:\n");
-    asm volatile ("addi x0, %0, 128" : "=r"(counter_val));
+    myputs("Reading counter 3 after write:\n");
+    asm volatile ("addi x0, %0, 160" : "=r"(counter_val));
     print_int(counter_val);
 
     myputs("Test passed!");
