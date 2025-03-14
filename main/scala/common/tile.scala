@@ -176,7 +176,19 @@ class BoomTileModuleImp(outer: BoomTile) extends BaseTileModuleImp(outer){
   // Connect the core pipeline to other intra-tile modules
   outer.frontend.module.io.cpu <> core.io.ifu
   core.io.lsu <> lsu.io.core
-
+  
+  // 将core中的event_counters连接到lsu
+  // 连接后32个计数器到core的event_counter_values
+  for (i <- 0 until 32) {
+    // 确保不会访问超出范围的索引
+    // if (i + 32 < 16*subECounterNum) {
+    //   lsu.io.event_counters(i) := core.io.event_counter_values(i + 32)
+    // } else {
+    //   lsu.io.event_counters(i) := 0.U
+    // }
+    lsu.io.event_counters(i) := core.io.event_counter_values(i + 32)
+  }
+  
   //fpuOpt foreach { fpu => core.io.fpu <> fpu.io } RocketFpu - not needed in boom
   core.io.rocc := DontCare
 

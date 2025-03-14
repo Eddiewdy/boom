@@ -171,6 +171,9 @@ class LSUIO(implicit p: Parameters, edge: TLEdgeOut) extends BoomBundle()(p)
   val dmem  = new LSUDMemIO
 
   val hellacache = Flipped(new freechips.rocketchip.rocket.HellaCacheIO)
+  
+  // 修改event_counters接口，只包含需要的32个计数器
+  val event_counters = Input(Vec(32, UInt(64.W)))
 }
 
 class LDQEntry(implicit p: Parameters) extends BoomBundle()(p)
@@ -212,6 +215,18 @@ class LSU(implicit p: Parameters, edge: TLEdgeOut) extends BoomModule()(p)
 {
   val io = IO(new LSUIO)
 
+  // 定义读取性能计数器的函数
+  def ReadCounter(idx: UInt): UInt = {
+    // 创建一个Wire来存储计数器值
+    val counter_value = WireInit(0.U(64.W))
+    
+    // 使用event_counters接口读取性能计数器值
+    when (idx >= 0.U && idx < 32.U) {
+      counter_value := io.event_counters(idx)
+    }
+    
+    counter_value
+  }
 
   val ldq = Reg(Vec(numLdqEntries, Valid(new LDQEntry)))
   val stq = Reg(Vec(numStqEntries, Valid(new STQEntry)))
@@ -725,6 +740,37 @@ class LSU(implicit p: Parameters, edge: TLEdgeOut) extends BoomModule()(p)
   val exe_tlb_paddr = widthMap(w => Cat(dtlb.io.resp(w).paddr(paddrBits-1,corePgIdxBits),
                                         exe_tlb_vaddr(w)(corePgIdxBits-1,0)))
   val exe_tlb_uncacheable = widthMap(w => !(dtlb.io.resp(w).cacheable))
+
+  // 检查访存地址是否在malloc分配的对象范围内
+  val malloc_obj_found = WireInit(VecInit(Seq.fill(memWidth)(false.B)))
+  val malloc_obj_size = WireInit(VecInit(Seq.fill(memWidth)(0.U(64.W))))
+  val malloc_obj_base = WireInit(VecInit(Seq.fill(memWidth)(0.U(64.W))))
+  
+  for (w <- 0 until memWidth) {
+    printf("exe_tlb_valid(w): %d, will_fire_load_incoming(w): %d, will_fire_load_retry(w): %d\n", exe_tlb_valid(w), will_fire_load_incoming(w), will_fire_load_retry(w))
+    when (exe_tlb_valid(w) && (will_fire_load_incoming(w) || will_fire_load_retry(w))) {
+      // 并行查询前32个性能计数器(0-31)，每两个一组，第一个存地址，第二个存大小
+      for (i <- 0 until 32 by 2) {
+        // 读取性能计数器中存储的malloc对象地址和大小
+        val counter_addr = ReadCounter(i.U)
+        val counter_size = ReadCounter((i+1).U)
+        printf("counter_addr: %d, counter_size: %d\n", counter_addr, counter_size)
+        // 检查当前访问的地址是否在malloc对象范围内
+        // 使用虚拟地址进行比较，因为malloc分配的是虚拟地址
+        when (counter_addr =/= 0.U && 
+              exe_tlb_vaddr(w) >= counter_addr && 
+              exe_tlb_vaddr(w) < (counter_addr + counter_size)) {
+          malloc_obj_found(w) := true.B
+          malloc_obj_base(w) := counter_addr
+          malloc_obj_size(w) := counter_size
+          
+          // 打印信息
+          printf("[MALLOC-CHECK] Memory access at 0x%x is within malloc object at 0x%x (size: %d)\n", 
+                 exe_tlb_vaddr(w), counter_addr, counter_size)
+        }
+      }
+    }
+  }
 
   for (w <- 0 until memWidth) {
     assert (exe_tlb_paddr(w) === dtlb.io.resp(w).paddr || exe_req(w).bits.sfence.valid, "[lsu] paddrs should match.")

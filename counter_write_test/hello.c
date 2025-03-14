@@ -121,6 +121,15 @@ int main() {
     asm volatile ("addi x0, %0, 160" : "=r"(counter_val));
     print_int(counter_val);
 
+    int my_array[100];
+  
+    // 将数组地址和大小写入性能计数器
+    
+    // 访问数组范围内的地址
+    my_array[0] = 42;   // 这将触发打印语句
+    my_array[50] = 99;  // 这也将触发打印语句
+
+
     myputs("Test passed!");
     test_exit(0);  // 测试成功
     return 0;

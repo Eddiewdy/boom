@@ -19,14 +19,24 @@ class SubEventCounterIO(readWidth: Int)(implicit p: Parameters) extends BoomBund
   val write_data = Input(Vec(readWidth, UInt(64.W)))
   val reset_counter = Input(Bool())
   val perf_counters = Input(Bool()) // 控制哪些计数器是性能计数器（自动累加事件）
+  // 添加一个新的输出接口，用于直接访问所有计数器的值
+  val counter_values = Output(Vec(16, UInt(64.W)))
 }
 
 class SubEventCounter(readWidth: Int)(implicit p: Parameters) extends BoomModule
 {
 	val io = IO(new SubEventCounterIO(readWidth))
 	// val reg_counters = io.event_signals.zipWithIndex.map { case (e, i) => freechips.rocketchip.util.WideCounter(64, e, reset = false) }
+  
+  // 将reg_counters暴露为公共字段，以便可以从外部访问
   val reg_counters = RegInit(VecInit(Seq.fill(16)(0.U(64.W))))
-  printf("io.perf_counters: %d\n", io.perf_counters)
+  
+  // 连接counter_values输出
+  for (w <- 0 until 16) {
+    io.counter_values(w) := reg_counters(w)
+  }
+  
+  // printf("io.perf_counters: %d\n", io.perf_counters)
   // 对于性能计数器，使用类似原始设计的方式自动累加
   for (w <- 0 until 16) {
     when (io.perf_counters && io.event_signals(w) =/= 0.U) {
@@ -80,6 +90,9 @@ class EventCounterIO(readWidth: Int, signalnum: Int)(implicit p: Parameters) ext
   val write_addr = Input(Vec(readWidth, Valid(UInt(7.W))))
   val write_data = Input(Vec(readWidth, UInt(64.W)))
   val reset_counter = Input(Bool())
+  
+  // 添加一个新的输出接口，用于直接访问所有计数器的值
+  val counter_values = Output(Vec(16*subECounterNum, UInt(64.W)))
 }
 
 
@@ -95,6 +108,13 @@ class EventCounter(readWidth: Int)(implicit p: Parameters) extends BoomModule
 	for(i <- 0 until readWidth){
 		io.read_data(i) := RegNext(reg_read_data(i))
 	}
+  
+  // 连接counter_values输出
+  for (w <- 0 until subECounterNum) {
+    for (s <- 0 until 16) {
+      io.counter_values(w*16 + s) := ecounters(w).io.counter_values(s)
+    }
+  }
 
   for (w <- 0 until subECounterNum) {
     ecounters(w).io.reset_counter := io.reset_counter
@@ -106,7 +126,7 @@ class EventCounter(readWidth: Int)(implicit p: Parameters) extends BoomModule
     //   ecounters(w).io.perf_counters(s) := isPerfCounter
     // }
     val isPerfCounter = (w < 2).B
-    printf("w: %d, isPerfCounter: %d\n", w.U, isPerfCounter)
+    // printf("w: %d, isPerfCounter: %d\n", w.U, isPerfCounter)
     ecounters(w).io.perf_counters := isPerfCounter
 
 

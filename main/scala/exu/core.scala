@@ -63,6 +63,8 @@ class BoomCore(usingTrace: Boolean)(implicit p: Parameters) extends BoomModule
     val ptw_tlb = new freechips.rocketchip.rocket.TLBPTWIO()
     val trace = Output(Vec(coreParams.retireWidth, new ExtendedTracedInstruction))
     val fcsr_rm = UInt(freechips.rocketchip.tile.FPConstants.RM_SZ.W)
+    // 添加一个新的输出接口，用于直接访问所有计数器的值
+    val event_counter_values = Output(Vec(16*subECounterNum, UInt(64.W)))
   }
   //**********************************
   // construct all of the modules
@@ -1857,4 +1859,7 @@ class BoomCore(usingTrace: Boolean)(implicit p: Parameters) extends BoomModule
     io.trace map (t => t.valid := false.B)
     io.ifu.debug_ftq_idx := DontCare
   }
+
+  // 连接event_counter_values输出
+  io.event_counter_values := event_counters.io.counter_values
 }
