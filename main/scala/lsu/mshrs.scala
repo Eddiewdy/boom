@@ -30,6 +30,7 @@ class BoomDCacheReqInternal(implicit p: Parameters) extends BoomDCacheReq()(p)
 
   // Used in the MSHRs
   val sdq_id    = UInt(log2Ceil(cfg.nSDQ).W)
+  override val vaddr = UInt(coreMaxAddrBits.W)
 }
 
 
@@ -75,6 +76,7 @@ class BoomMSHR(implicit edge: TLEdgeOut, p: Parameters) extends BoomModule()(p)
     // To inform the prefetcher when we are commiting the fetch of this line
     val commit_val  = Output(Bool())
     val commit_addr = Output(UInt(coreMaxAddrBits.W))
+    val commit_vaddr = Output(UInt(coreMaxAddrBits.W))
     val commit_coh  = Output(new ClientMetadata)
 
     // Reading from the line buffer
@@ -163,6 +165,7 @@ class BoomMSHR(implicit edge: TLEdgeOut, p: Parameters) extends BoomModule()(p)
   io.resp.valid          := false.B
   io.commit_val          := false.B
   io.commit_addr         := req.addr
+  io.commit_vaddr        := req.vaddr
   io.commit_coh          := coh_on_grant
   io.meta_read.valid     := false.B
   io.mem_finish.valid    := false.B
@@ -605,6 +608,7 @@ class BoomMSHRFile(implicit edge: TLEdgeOut, p: Parameters) extends BoomModule()
 
   val commit_vals    = Wire(Vec(cfg.nMSHRs, Bool()))
   val commit_addrs   = Wire(Vec(cfg.nMSHRs, UInt(coreMaxAddrBits.W)))
+  val commit_vaddrs  = Wire(Vec(cfg.nMSHRs, UInt(coreMaxAddrBits.W)))
   val commit_cohs    = Wire(Vec(cfg.nMSHRs, new ClientMetadata))
 
   var sec_rdy   = false.B
@@ -666,6 +670,7 @@ class BoomMSHRFile(implicit edge: TLEdgeOut, p: Parameters) extends BoomModule()
 
     commit_vals(i)  := mshr.io.commit_val
     commit_addrs(i) := mshr.io.commit_addr
+    commit_vaddrs(i) := mshr.io.commit_vaddr
     commit_cohs(i)  := mshr.io.commit_coh
 
     mshr.io.mem_grant.valid := false.B
@@ -761,5 +766,6 @@ class BoomMSHRFile(implicit edge: TLEdgeOut, p: Parameters) extends BoomModule()
   prefetcher.io.mshr_avail    := RegNext(pri_rdy)
   prefetcher.io.req_val       := RegNext(commit_vals.reduce(_||_))
   prefetcher.io.req_addr      := RegNext(Mux1H(commit_vals, commit_addrs))
+  prefetcher.io.req_vaddr     := RegNext(Mux1H(commit_vals, commit_vaddrs))
   prefetcher.io.req_coh       := RegNext(Mux1H(commit_vals, commit_cohs))
 }

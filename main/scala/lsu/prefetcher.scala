@@ -27,6 +27,7 @@ abstract class DataPrefetcher(implicit edge: TLEdgeOut, p: Parameters) extends B
     val mshr_avail = Input(Bool())
     val req_val    = Input(Bool())
     val req_addr   = Input(UInt(coreMaxAddrBits.W))
+    val req_vaddr  = Input(UInt(coreMaxAddrBits.W))
     val req_coh    = Input(new ClientMetadata)
 
     val prefetch   = Decoupled(new BoomDCacheReq)
@@ -50,13 +51,16 @@ class NLPrefetcher(implicit edge: TLEdgeOut, p: Parameters) extends DataPrefetch
 
   val req_valid = RegInit(false.B)
   val req_addr  = Reg(UInt(coreMaxAddrBits.W))
+  val req_vaddr = Reg(UInt(coreMaxAddrBits.W))
   val req_cmd   = Reg(UInt(M_SZ.W))
 
   val mshr_req_addr = io.req_addr + cacheBlockBytes.U
+  val mshr_req_vaddr = io.req_vaddr + cacheBlockBytes.U
   val cacheable = edge.manager.supportsAcquireBSafe(mshr_req_addr, lgCacheBlockBytes.U)
   when (io.req_val && cacheable) {
     req_valid := true.B
     req_addr  := mshr_req_addr
+    req_vaddr := mshr_req_vaddr
     req_cmd   := Mux(ClientStates.hasWritePermission(io.req_coh.state), M_PFW, M_PFR)
   } .elsewhen (io.prefetch.fire()) {
     req_valid := false.B
