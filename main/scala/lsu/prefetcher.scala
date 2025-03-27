@@ -6,6 +6,7 @@
 package boom.lsu
 
 import boom.common._
+import boom.common.constants.MemoryOpConstants
 import chisel3._
 import chisel3.util._
 import freechips.rocketchip.config.Parameters
@@ -76,6 +77,45 @@ class NLPrefetcher(implicit edge: TLEdgeOut, p: Parameters) extends DataPrefetch
   io.prefetch.bits.uop.mem_cmd := req_cmd
   io.prefetch.bits.data        := DontCare
   io.prefetch.bits.vaddr       := req_vaddr  // 添加虚拟地址
+  
+  // 不需要TLB翻译，因为已经使用物理地址
+  io.prefetch_translation_req.valid := false.B
+  io.prefetch_translation_req.bits.translation_vaddr := DontCare
+}
+
+/**
+  * L2-Only Next Line Prefetcher
+  * 
+  * 这个预取器生成的请求只会将数据预取到L2缓存，不会填充L1缓存
+  * 通过设置特殊的mem_cmd实现 - M_PFR_L2ONLY
+  */
+class L2OnlyNLPrefetcher(implicit edge: TLEdgeOut, p: Parameters) extends DataPrefetcher
+  with MemoryOpConstants
+{
+  val req_valid = RegInit(false.B)
+  val req_addr  = Reg(UInt(coreMaxAddrBits.W))
+  val req_vaddr = Reg(UInt(coreMaxAddrBits.W))
+  val req_cmd   = Reg(UInt(M_SZ.W))
+
+  val mshr_req_addr = io.req_addr + cacheBlockBytes.U
+  val mshr_req_vaddr = io.req_vaddr + cacheBlockBytes.U
+  val cacheable = edge.manager.supportsAcquireBSafe(mshr_req_addr, lgCacheBlockBytes.U)
+  when (io.req_val && cacheable) {
+    req_valid := true.B
+    req_addr  := mshr_req_addr
+    req_vaddr := mshr_req_vaddr
+    // 使用特殊的预取命令，指示只预取到L2
+    req_cmd   := M_PFR_L2ONLY  // 使用在MemoryOpConstants中定义的命令
+  } .elsewhen (io.prefetch.fire()) {
+    req_valid := false.B
+  }
+
+  io.prefetch.valid            := req_valid && io.mshr_avail
+  io.prefetch.bits.addr        := req_addr
+  io.prefetch.bits.uop         := NullMicroOp
+  io.prefetch.bits.uop.mem_cmd := req_cmd
+  io.prefetch.bits.data        := DontCare
+  io.prefetch.bits.vaddr       := req_vaddr
   
   // 不需要TLB翻译，因为已经使用物理地址
   io.prefetch_translation_req.valid := false.B

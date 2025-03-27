@@ -38,7 +38,7 @@ case class BoomCoreParams(
   maxBrCount: Int = 4,
   numFetchBufferEntries: Int = 16,
   enableAgePriorityIssue: Boolean = true,
-  enablePrefetching: Boolean = false,
+  enablePrefetching: Boolean = true,
   enableFastLoadUse: Boolean = true,
   enableCommitMapTable: Boolean = false,
   enableFastPNR: Boolean = false,

@@ -401,3 +401,16 @@ trait ExcCauseConstants
 
   require (!freechips.rocketchip.rocket.Causes.all.contains(16))
 }
+
+/**
+ * Mixin for memory operation constants
+ * Extensions to the Rocket Chip memory commands
+ */
+trait MemoryOpConstants
+{
+  // Import original memory commands from rocket
+  import freechips.rocketchip.rocket.{M_XRD, M_XWR, M_PFR, M_PFW}
+  
+  // Define our new memory command for L2-only prefetch
+  val M_PFR_L2ONLY = M_XRD | M_PFR | 0x10.U // L2-only prefetch read
+}

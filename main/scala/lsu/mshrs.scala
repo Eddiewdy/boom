@@ -17,6 +17,7 @@ import freechips.rocketchip.util._
 import freechips.rocketchip.rocket._
 
 import boom.common._
+import boom.common.constants.MemoryOpConstants
 import boom.exu.BrUpdateInfo
 import boom.util.{IsKilledByBranch, GetNewBrMask, BranchKillableQueue, IsOlder, UpdateBrMask, AgePriorityEncoder, WrapInc}
 
@@ -36,6 +37,7 @@ class BoomDCacheReqInternal(implicit p: Parameters) extends BoomDCacheReq()(p)
 
 class BoomMSHR(implicit edge: TLEdgeOut, p: Parameters) extends BoomModule()(p)
   with HasL1HellaCacheParameters
+  with MemoryOpConstants
 {
   val io = IO(new Bundle {
     val id = Input(UInt())
@@ -105,7 +107,7 @@ class BoomMSHR(implicit edge: TLEdgeOut, p: Parameters) extends BoomModule()(p)
   // s_meta_write_req  : Write the metadata for new cache lne
   // s_meta_write_resp :
 
-  val s_invalid :: s_refill_req :: s_refill_resp :: s_drain_rpq_loads :: s_meta_read :: s_meta_resp_1 :: s_meta_resp_2 :: s_meta_clear :: s_wb_meta_read :: s_wb_req :: s_wb_resp :: s_commit_line :: s_drain_rpq :: s_meta_write_req :: s_mem_finish_1 :: s_mem_finish_2 :: s_prefetched :: s_prefetch :: Nil = Enum(18)
+  val s_invalid :: s_refill_req :: s_refill_resp :: s_drain_rpq_loads :: s_meta_read :: s_meta_resp_1 :: s_meta_resp_2 :: s_meta_clear :: s_wb_meta_read :: s_wb_req :: s_wb_resp :: s_commit_line :: s_drain_rpq :: s_meta_write_req :: s_mem_finish_1 :: s_mem_finish_2 :: s_prefetched :: s_prefetch :: s_prefetch_l2_only :: s_prefetch_l2_only_resp :: s_prefetch_l2_only_finish :: Nil = Enum(21)
   val state = RegInit(s_invalid)
 
   val req     = Reg(new BoomDCacheReqInternal)
@@ -187,7 +189,13 @@ class BoomMSHR(implicit edge: TLEdgeOut, p: Parameters) extends BoomModule()(p)
     req := io.req
     val old_coh   = io.req.old_meta.coh
     req_needs_wb := old_coh.onCacheControl(M_FLUSH)._1 // does the line we are evicting need to be written back
-    when (io.req.tag_match) {
+    
+    // 检测是否是L2-only预取请求
+    when (isPrefetch(io.req.uop.mem_cmd) && io.req.uop.mem_cmd === M_PFR_L2ONLY) {
+      // 对于L2-only预取，不需要将数据填充到L1
+      new_coh     := ClientMetadata.onReset
+      new_state   := s_prefetch_l2_only
+    } .elsewhen (io.req.tag_match) {
       val (is_hit, _, coh_on_hit) = old_coh.onAccess(io.req.uop.mem_cmd)
       when (is_hit) { // set dirty bit
         assert(isWrite(io.req.uop.mem_cmd))
@@ -388,6 +396,42 @@ class BoomMSHR(implicit edge: TLEdgeOut, p: Parameters) extends BoomModule()(p)
       grant_had_data := false.B
       state := handle_pri_req(state)
     }
+  } .elsewhen (state === s_prefetch_l2_only) {
+    // 使用AcquireBlock作为L2-only预取方案
+    // 我们发送正常的AcquireBlock请求，但在收到数据后不会将其填充到L1缓存中
+    io.mem_acquire.valid := true.B
+    io.mem_acquire.bits  := edge.AcquireBlock(
+      fromSource      = io.id,
+      toAddress       = Cat(req_tag, req_idx) << blockOffBits,
+      lgSize          = lgCacheBlockBytes.U,
+      growPermissions = grow_param)._2
+    
+    when (io.mem_acquire.fire()) {
+      state := s_prefetch_l2_only_resp
+    }
+  } .elsewhen (state === s_prefetch_l2_only_resp) {
+    // 接收来自L2的响应，但不将数据写入行缓冲区
+    // 只是简单地吞下数据，保持TileLink协议的完整性
+    io.mem_grant.ready := true.B
+
+    when (io.mem_grant.fire()) {
+      // 检查是否是最后一个数据拍
+      when (refill_done) {
+        // 如果边缘是请求，需要发送ACK以完成协议循环
+        grantack.valid := edge.isRequest(io.mem_grant.bits)
+        grantack.bits := edge.GrantAck(io.mem_grant.bits)
+        state := s_prefetch_l2_only_finish
+      }
+    }
+  } .elsewhen (state === s_prefetch_l2_only_finish) {
+    // 发送GrantAck确认信息
+    io.mem_finish.valid := grantack.valid
+    io.mem_finish.bits  := grantack.bits
+    
+    when (io.mem_finish.fire() || !grantack.valid) {
+      grantack.valid := false.B
+      state := s_invalid // 完成后回到初始状态
+    }
   }
 }
 
@@ -547,7 +591,8 @@ class BoomMSHRFile(implicit edge: TLEdgeOut, p: Parameters) extends BoomModule()
   for (w <- 0 until memWidth)
     io.req(w).ready := false.B
 
-  val prefetcher: DataPrefetcher = if (enablePrefetching) Module(new VAddrNLPrefetcher)
+  // 修改为使用L2OnlyNLPrefetcher
+  val prefetcher: DataPrefetcher = if (enablePrefetching) Module(new L2OnlyNLPrefetcher)
                                                      else Module(new NullPrefetcher)
 
   io.prefetch <> prefetcher.io.prefetch
