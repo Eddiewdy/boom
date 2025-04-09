@@ -71,6 +71,10 @@ class BoomDCacheReq(implicit p: Parameters) extends BoomBundle()(p)
   val data  = Bits(coreDataBits.W)
   val is_hella = Bool() // Is this the hellacache req? If so this is not tracked in LDQ or STQ
   val vaddr = UInt(coreMaxAddrBits.W) // 添加虚拟地址字段
+  // 添加malloc对象信息
+  val malloc_obj_addr = UInt(coreMaxAddrBits.W)  // malloc对象的基地址
+  val malloc_obj_size = UInt(coreMaxAddrBits.W)  // malloc对象的大小
+  val malloc_obj_id   = UInt(5.W)  // 性能计数器索引,最多32对,所以5位足够
 }
 
 class BoomDCacheTranslationReq(implicit p: Parameters) extends BoomBundle()(p)
@@ -768,28 +772,27 @@ class LSU(implicit p: Parameters, edge: TLEdgeOut) extends BoomModule()(p)
   val malloc_obj_found = WireInit(VecInit(Seq.fill(memWidth)(false.B)))
   val malloc_obj_size = WireInit(VecInit(Seq.fill(memWidth)(0.U(64.W))))
   val malloc_obj_base = WireInit(VecInit(Seq.fill(memWidth)(0.U(64.W))))
+  val malloc_obj_id = WireInit(VecInit(Seq.fill(memWidth)(0.U(5.W))))
   
   for (w <- 0 until memWidth) {
     printf("exe_tlb_valid(w): %d, will_fire_load_incoming(w): %d, will_fire_load_retry(w): %d\n", exe_tlb_valid(w), will_fire_load_incoming(w), will_fire_load_retry(w))
     when (exe_tlb_valid(w) && (will_fire_load_incoming(w) || will_fire_load_retry(w))) {
       // 并行查询前32个性能计数器(0-31)，每两个一组，第一个存地址，第二个存大小
       for (i <- 0 until 32 by 2) {
-        // 读取性能计数器中存储的malloc对象地址和大小
         val counter_addr = ReadCounter(i.U)
         val counter_size = ReadCounter((i+1).U)
         printf("counter_addr: %d, counter_size: %d\n", counter_addr, counter_size)
         // 检查当前访问的地址是否在malloc对象范围内
-        // 使用虚拟地址进行比较，因为malloc分配的是虚拟地址
         when (counter_addr =/= 0.U && 
               exe_tlb_vaddr(w) >= counter_addr && 
               exe_tlb_vaddr(w) < (counter_addr + counter_size)) {
           malloc_obj_found(w) := true.B
           malloc_obj_base(w) := counter_addr
           malloc_obj_size(w) := counter_size
+          malloc_obj_id(w) := i.U  // 记录找到的是第几对计数器
           
-          // 打印信息
-          printf("[MALLOC-CHECK] Memory access at 0x%x is within malloc object at 0x%x (size: %d)\n", 
-                 exe_tlb_vaddr(w), counter_addr, counter_size)
+          printf("[MALLOC-CHECK] Memory access at 0x%x is within malloc object at 0x%x (size: %d, id: %d)\n", 
+                 exe_tlb_vaddr(w), counter_addr, counter_size, i.U)
         }
       }
     }
@@ -853,6 +856,9 @@ class LSU(implicit p: Parameters, edge: TLEdgeOut) extends BoomModule()(p)
     dmem_req(w).bits.data  := 0.U
     dmem_req(w).bits.is_hella := false.B
     dmem_req(w).bits.vaddr := 0.U // 初始化虚拟地址字段
+    dmem_req(w).bits.malloc_obj_addr := 0.U
+    dmem_req(w).bits.malloc_obj_size := 0.U
+    dmem_req(w).bits.malloc_obj_id := 0.U
 
     io.dmem.s1_kill(w) := false.B
 
@@ -893,6 +899,10 @@ class LSU(implicit p: Parameters, edge: TLEdgeOut) extends BoomModule()(p)
       dmem_req(w).bits.addr  := ldq_wakeup_e.bits.addr.bits
       dmem_req(w).bits.uop   := ldq_wakeup_e.bits.uop
       dmem_req(w).bits.vaddr := 0.U
+      // 添加malloc对象信息
+      dmem_req(w).bits.malloc_obj_addr := Mux(malloc_obj_found(w), malloc_obj_base(w), 0.U)
+      dmem_req(w).bits.malloc_obj_size := Mux(malloc_obj_found(w), malloc_obj_size(w), 0.U)
+      dmem_req(w).bits.malloc_obj_id   := Mux(malloc_obj_found(w), malloc_obj_id(w), 0.U)
 
       s0_executing_loads(ldq_wakeup_idx) := dmem_req_fire(w)
 

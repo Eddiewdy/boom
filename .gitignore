@@ -1,6 +1,8 @@
 # 系统文件
 .DS_Store
-
+/.vscode
+/.metals
+/main/target
 # counter_write_test 目录下的二进制文件
 counter_write_test/*.dump
 counter_write_test/*.bin

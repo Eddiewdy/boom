@@ -152,6 +152,7 @@ class WithNMediumBooms(n: Int = 1, overrideIdOffset: Option[Int] = None) extends
               numStqEntries = 16,
               maxBrCount = 12,
               numFetchBufferEntries = 16,
+              enablePrefetching = true,
               ftq = FtqParameters(nEntries=32),
               nPerfCounters = 6,
               fpu = Some(freechips.rocketchip.tile.FPUParams(sfmaLatency=4, dfmaLatency=4, divSqrt=true))

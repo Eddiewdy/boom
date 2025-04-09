@@ -26,6 +26,9 @@ abstract class DataPrefetcher(implicit edge: TLEdgeOut, p: Parameters) extends B
     val req_addr   = Input(UInt(coreMaxAddrBits.W))
     val req_vaddr  = Input(UInt(coreMaxAddrBits.W))
     val req_coh    = Input(new ClientMetadata)
+    val malloc_obj_addr = Input(UInt(coreMaxAddrBits.W))
+    val malloc_obj_size = Input(UInt(coreMaxAddrBits.W))
+    val malloc_obj_id   = Input(UInt(5.W))
 
     val prefetch   = Decoupled(new BoomDCacheReq)
     
